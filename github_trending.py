@@ -13,38 +13,48 @@ def get_trending_repositories(top_stars, days_ago):
         'order': 'desc',
         'per_page': top_stars
     }
-    request = requests.get(
+    response = requests.get(
         'https://api.github.com/search/repositories',
         params=request_params
     )
-    if request.status_code == requests.codes.ok:
-        return request.json()['items']
+    if response.ok:
+        return response.json()['items']
     else:
-        return None
+        return response.status_code
 
 
-def get_open_issues_amount(repo_name):
+def get_open_issues_amount(repo):
 
-        request = requests.get(
-            'https://api.github.com/repos/{}/issues'.format(repo_name)
-            )
-        return len(request.json())
-
-
-def pprint_data(request_json):
-
-    for repo in request_json:
         repo_name = repo.get('full_name')
         repo_owner = repo.get('owner').get('login')
         repo_url = repo.get('url')
-        issues_count = get_open_issues_amount(repo_name)
-        print('User: {0} URL: {1} Repositories: {2} Issues: {3}\n'.format(
+        response = requests.get(
+            'https://api.github.com/repos/{}/issues'.format(repo_name)
+            )
+        if response.ok:
+            issues_count = len(response.json())
+        else:
+            issues_count = 'Error: {}'.format(response.status_code)
+        return 'User: {0} URL: {1} Repositories: {2} Issues: {3}\n'.format(
             repo_owner,
             repo_url,
             repo_name,
-            issues_count
-            )
-        )
+            issues_count)
+
+
+def handler_trend_repos(trend_repos):
+    url_and_issues_repos = []
+
+    for repo in trend_repos:
+        url_and_issues_repos.append(get_open_issues_amount(repo))
+    return url_and_issues_repos
+
+
+def pprint_repos_data(url_and_issues_repos):
+
+    print('')
+    for idx, data_repo in enumerate(url_and_issues_repos, start=1):
+        print(idx, data_repo)
 
 
 def get_parser_args():
@@ -70,16 +80,17 @@ def get_parser_args():
 
 
 if __name__ == '__main__':
-
     arguments = get_parser_args()
     start_time = timeit.default_timer()
 
-    request_json = get_trending_repositories(
+    trend_repos = get_trending_repositories(
         arguments.top_stars,
         arguments.days_ago
         )
-    if request_json is not None:
-        pprint_data(request_json)
+    if list(trend_repos) and trend_repos is not None:
+        url_and_issues_repos = handler_trend_repos(trend_repos)
+        pprint_repos_data(url_and_issues_repos)
     else:
-        print(' Not data in request!')
+        error_status = trend_repos
+        print(' Problem of the request to the server: {}'.format(error_status))
     print(' Script Time: {}'.format(timeit.default_timer() - start_time))
