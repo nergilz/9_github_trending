@@ -5,7 +5,7 @@ import argparse
 from collections import namedtuple
 
 
-def get_trending_repositories(top_stars, days_ago):
+def get_response_trends_repos(top_stars, days_ago):
 
     date_ago = datetime.date.today() - datetime.timedelta(days_ago)
     request_params = {
@@ -20,33 +20,36 @@ def get_trending_repositories(top_stars, days_ago):
         )
 
 
-def get_open_issues_amount(repo):
+def get_response_issues_repos(repo_name):
 
-    repo_name = repo['full_name']
-    repo_owner = repo['owner']['login']
-    repo_url = repo['url']
-    response = requests.get(
-        'https://api.github.com/repos/{}/issues'.format(repo_name)
-        )
-    if response.ok:
-        issues_count = len(response.json())
-    else:
-        issues_count = 'Error: {}'.format(response.status_code)
-    return Data_repo(repo_owner, repo_url, repo_name, issues_count)
+    return requests.get(
+        'https://api.github.com/repos/{}/issues'.format(repo_name))
 
 
-def get_owner_url_issues_repo(trend_repos):
-    url_issues_repos = []
+def get_data_on_trend_repos(trend_repos):
+    Data_repo = namedtuple('Data_repo', 'owner url name count')
+    urls_issues_names_repos = []
 
     for repo in trend_repos:
-        url_issues_repos.append(get_open_issues_amount(repo))
-    return url_issues_repos
+        repo_owner = repo['owner']['login']
+        repo_name = repo['full_name']
+        repo_url = repo['url']
+        response_issues = get_response_issues_repos(repo_name)
+        issues_count = len(response_issues.json())
+        urls_issues_names_repos.append(
+            Data_repo(
+                repo_owner,
+                repo_url,
+                repo_name,
+                issues_count)
+            )
+    return urls_issues_names_repos
 
 
-def pprint_repos_data(url_issues_repos):
+def pprint_repos_data(url_issues_names_repos):
 
     print()
-    for index, data_repo in enumerate(url_issues_repos, start=1):
+    for index, data_repo in enumerate(url_issues_names_repos, start=1):
         print(
             index,
             'User: {} URL: {} Repo: {} Issues: {}\n'.format(
@@ -61,7 +64,7 @@ def pprint_repos_data(url_issues_repos):
 def get_parser_args():
 
     parser = argparse.ArgumentParser(
-        description='This url to repositories, top_count and days_ago arguments for scripts'
+        description='This top_count and days_ago arguments for scripts'
     )
     parser.add_argument(
         'top_stars',
@@ -83,15 +86,17 @@ def get_parser_args():
 if __name__ == '__main__':
     arguments = get_parser_args()
     start_time = timeit.default_timer()
-    Data_repo = namedtuple('Data_repo', 'owner url name count')
 
-    response_trends = get_trending_repositories(
-        arguments.top_stars,
-        arguments.days_ago
-        )
-    if response_trends.ok and response_trends.json()['items'] is not None:
-        url_and_issues_repos = get_owner_url_issues_repo(response_trends.json()['items'])
-        pprint_repos_data(url_and_issues_repos)
-    else:
-        print(' Problem of the request to the server: {}'.format(response_trends.status_code))
+    try:
+        response_trends = get_response_trends_repos(
+            arguments.top_stars,
+            arguments.days_ago
+            )
+        trend_repos = response_trends.json()['items']
+        urls_issues_names_repos = get_data_on_trend_repos(trend_repos)
+        pprint_repos_data(urls_issues_names_repos)
+
+    except requests.exceptions.HTTPError as error:
+        print(' Requests ERROR:', error)
+
     print(' Script Time: {}'.format(timeit.default_timer() - start_time))
